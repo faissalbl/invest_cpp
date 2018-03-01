@@ -1,0 +1,200 @@
+#include <cstdlib>
+#include <iostream>
+#include <string>
+#include <cmath>
+#include <vector>
+#include <map>
+#include <algorithm>
+
+using namespace std;
+
+class Application {
+	public:
+	int monthApplied;
+	double amount;
+	Application(int monthApplied, double amount) 
+		:monthApplied(monthApplied), amount(amount) {}
+};
+
+class InvestmentCalculator {
+
+	private:
+		map<string, double> mArgs;
+		double calculateTax(int);
+		template<class T> T& nvl(const T&, const T&);
+  
+	public:
+		InvestmentCalculator(map<string, double> mArgs)
+			:mArgs(mArgs) {}
+  
+		void calculate();  
+};
+
+const string USAGE = "Usage: Invest [--initialAmount ?] --monthlyAmount ? --months ? --annualRate ? [--tax true/false]";
+
+template<class T> bool contains(const vector<T>& v, const T&);
+
+template<class T> bool containsAll(const vector<T>& vContained, const vector<T>& vContains);
+
+map<string, double> createArgsMap(int, char**);
+
+/**
+args: [--initialAmount ?] --monthlyAmount ? --months ? --annualRate ? [--tax true/false]
+*/
+int main(int argc, char** argv) 
+{
+	map<string, double> mArgs = createArgsMap(argc, argv);
+	InvestmentCalculator(mArgs).calculate();
+}
+
+
+map<string, double> createArgsMap(int argc, char** argv) {
+
+	const vector<string> ARG_NAMES = {"--initialAmount", "--monthlyAmount", "--months", "--annualRate", "--tax"};
+	const vector<string> REQUIRED_ARG_NAMES = {"--monthlyAmount", "--months", "--annualRate"};
+
+	if (argc == 0 || argc % 2 != 0) {
+		throw runtime_error(USAGE); 
+	}
+	
+	map<string, double> result;
+   	vector<string> keys;
+	for (int i = 0; i < argc; i += 2) {
+		string name = argv[i];
+		keys.push_back(name);
+		double value = atof(argv[i + 1]);
+		result[name] = value;
+	}
+	
+	if (!containsAll(keys, ARG_NAMES)) 
+		throw runtime_error(USAGE);
+	
+	if (!containsAll(keys, REQUIRED_ARG_NAMES))
+		throw runtime_error("Missing required arguments. " + USAGE);
+	
+	return result;
+}
+
+template<class T> bool contains(const vector<T>& v, const T& item) 
+{
+	return !v.empty() && find(v.begin(), v.end(), item) != v.end();
+}
+
+template<class T> bool containsAll(const vector<T>& vContained, const vector<T>& vContains) 
+{
+	if (vContained.empty() || vContains.empty())
+		return false;
+
+	/* assuming unique objects for each vector */
+	if (vContained.size() > vContains.size())
+		return false;
+
+	for (int i = 0; i < vContained.size(); i++) {
+		T item = vContained[i];
+		if (find(vContains.begin(), vContains.end(), item) == vContains.end())
+			return false;
+	}
+
+	return true;
+}
+
+//CONVERT THIS TO C++
+void InvestmentCalculator::calculate() {
+	const int MONTHS_IN_YEAR = 12;
+	const int MONTH_ZERO = 0;
+	const int ONE = 1;
+
+  	double initialAmount = mArgs["--initialAmount"];
+	double monthlyAmount = mArgs["--monthlyAmount"];
+	int months = int(mArgs["--months"]);
+	double annualRate = mArgs["--annualRate"];
+
+	vector<Application> applications;
+
+	applications.push_back(Application(MONTH_ZERO, initialAmount));
+
+	if (monthlyAmount > 0)
+		for (int month = 1; month <= months; ++month) {
+			applications.push_back(Application(month, monthlyAmount));
+		}
+
+	double totalAmount = 0.0;
+	double totalCorrectedAmount = 0.0;
+	double totalTaxAmount = 0.0;
+	for(Application& application : applications) {
+
+		int applicationMonths = months - application.monthApplied;
+		int applicationYears = applicationMonths / MONTHS_IN_YEAR;
+		int remainingMonths = applicationMonths % MONTHS_IN_YEAR;
+
+		cout << "applicationMonths " << applicationMonths << endl;
+		double tax = calculateTax(applicationMonths);
+		cout << "tax " << tax << endl;
+
+		double amount = application.amount;
+		totalAmount += amount;
+
+		if (applicationYears > 0) 
+			amount = application.amount * pow((1 + annualRate), applicationYears);
+
+		cout << "annualRate " << (1 + annualRate) << endl;
+		cout << "years " << applicationYears << endl;
+		cout << "amountYears " << amount << endl;
+
+		cout << "remainingMonths " << remainingMonths << endl;
+		if (remainingMonths > 0) {
+			double amountYear = amount * pow((1 + annualRate), ONE);
+			double amountMonths = amountYear / MONTHS_IN_YEAR;
+			cout << "amountMonths " << amountMonths << endl;
+			amount += amountMonths;
+		}
+
+		double grossProfit = amount - application.amount;
+		cout << "grossProfit " << grossProfit << endl;
+
+		totalCorrectedAmount += amount;
+		double taxableAmount = amount - application.amount;
+
+		cout << "taxableAmount " << taxableAmount << endl;
+		double taxAmount = taxableAmount * tax;
+		cout << "taxAmount " << taxAmount << endl;
+		cout << "------------------------------------------";
+		totalTaxAmount += taxAmount;
+	}
+	double netAmount = totalCorrectedAmount - totalTaxAmount;
+
+	cout << "Initial Amount:\t" << initialAmount << endl;    
+	cout << "Months:\t" << months << endl;
+	cout << "Invested Amount:\t" << totalAmount << endl;
+	cout << "Corrected Amount:\t" << totalCorrectedAmount << endl;
+	cout << "Tax Amount:\t" << totalTaxAmount << endl;
+	cout << "Net Amount:\t" << netAmount << endl;	
+}
+
+//TODO verify real taxes for periods
+double InvestmentCalculator::calculateTax(int month) {
+	const double INITIAL_TAX = 0.225;
+
+	const int LIMIT_1 = 6;
+	const int LIMIT_2 = 12;
+	const int LIMIT_3 = 24;
+	
+	const double TAX_1 = 0.2;
+	const double TAX_2 = 0.185;
+	const double TAX_3 = 0.15;
+
+	if (month < LIMIT_1) return INITIAL_TAX;
+	if (month < LIMIT_2) return TAX_1;
+	if (month < LIMIT_3) return TAX_2;
+	return TAX_3; 		
+}
+  
+template<class T> T& InvestmentCalculator::nvl(const T& arg, const T& defaultArg) {
+	if (arg == NULL)
+		return defaultArg;
+
+	return arg;
+}
+  
+
+
